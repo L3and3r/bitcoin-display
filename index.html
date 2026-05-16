@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>₿ Bitcoin Display</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --orange: #F7931A;
+      --green:  #22C55E;
+      --red:    #EF4444;
+      --blue:   #38BDF8;
+      --purple: #A78BFA;
+      --bg:     #06080C;
+      --tile:   rgba(255,255,255,0.03);
+      --bdr:    rgba(247,147,26,0.15);
+      --text:   #E2E8F0;
+      --muted:  #5A6A7A;
+      --mono:   'Share Tech Mono', monospace;
+      --disp:   'Orbitron', sans-serif;
+      --gap:    10px;
+      --r:      13px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Animated background glow */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(ellipse 55% 40% at 15% 20%, rgba(247,147,26,.04) 0%, transparent 65%),
+        radial-gradient(ellipse 45% 50% at 85% 80%, rgba(56,189,248,.03) 0%, transparent 65%);
+      animation: bgBreath 8s ease-in-out infinite alternate;
+      pointer-events: none;
+      z-index: 0;
+    }
+    @keyframes bgBreath {
+      from { opacity: .5; }
+      to   { opacity: 1; }
+    }
+
+    /* CRT scanlines */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 3px,
+        rgba(0,0,0,0.055) 3px, rgba(0,0,0,0.055) 4px
+      );
+      pointer-events: none;
+      z-index: 9000;
+    }
+
+    /* Vignette */
+    .vignette {
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse at 50% 50%, transparent 45%, rgba(0,0,0,.75) 100%);
+      pointer-events: none;
+      z-index: 8999;
+    }
+
+    /* ── Root ─────────────────────────────────────────── */
+    .root {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-rows: 42px 72px 1fr;
+      gap: var(--gap);
+      height: 100vh;
+      padding: 13px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    /* ── Header ───────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px;
+    }
+
+    .logo {
+      font-family: var(--disp);
+      font-weight: 900;
+      font-size: 15px;
+      letter-spacing: 6px;
+      color: var(--orange);
+      text-shadow: 0 0 20px rgba(247,147,26,.6), 0 0 40px rgba(247,147,26,.2);
+    }
+
+    .hright {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--muted);
+    }
+
+    .live {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Live dot with halo ring */
+    .dot-wrap {
+      position: relative;
+      width: 10px; height: 10px;
+    }
+    .dot {
+      position: absolute; inset: 2px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+    .dot-ring {
+      position: absolute; inset: 0;
+      border-radius: 50%;
+      border: 1px solid var(--green);
+      animation: liveRing 3s ease-out infinite;
+    }
+    .dot.off { background: rgba(247,147,26,.4); box-shadow:none; }
+    .dot.off + .dot-ring { border-color: rgba(247,147,26,.4); animation:none; }
+    @keyframes liveRing {
+      0%   { transform: scale(1); opacity: .5; }
+      100% { transform: scale(2.2); opacity: 0; }
+    }
+
+    /* ── Sparkline strip ──────────────────────────────── */
+    .spark-strip {
+      border: 1px solid var(--bdr);
+      border-radius: var(--r);
+      background: var(--tile);
+      padding: 8px 14px 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .spark-strip .lbl { font-size: 9px; letter-spacing: 2px; color: var(--muted); margin-bottom: 4px; }
+    .spark-strip svg { width: 100%; height: 38px; display: block; }
+
+    /* ── Main grid (3 cols × 3 rows) ─────────────────── */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: var(--gap);
+    }
+
+    /* ── Base tile ────────────────────────────────────── */
+    .tile {
+      border: 1px solid var(--bdr);
+      border-radius: var(--r);
+      background: var(--tile);
+      padding: 14px 18px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* inner ambient glow */
+    .tile::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 70% 60% at 25% 30%, var(--glow,transparent) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* ripple ring (added via JS) */
+    .ripple {
+      position: absolute; inset: -1px;
+      border-radius: var(--r);
+      border: 1px solid currentColor;
+      animation: rippleOut .7s ease-out forwards;
+      pointer-events: none;
+    }
+    @keyframes rippleOut {
+      0%   { transform: scale(1); opacity: .7; }
+      100% { transform: scale(1.06); opacity: 0; }
+    }
+
+    .lbl {
+      font-size: 20px;
+      letter-spacing: 1px;
+      color: #8FA5BF;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .sub {
+      font-size: 16px;
+      color: #6B7E92;
+      margin-top: 5px;
+    }
+
+    /* number slide wrapper */
+    .slide-wrap {
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    /* ── EUR tile ─────────────────────────────────────── */
+    .eur-tile { --glow: rgba(247,147,26,.06); border-color: rgba(247,147,26,.22); }
+
+    /* ── USD tile ─────────────────────────────────────── */
+    .usd-tile { --glow: rgba(56,189,248,.05); border-color: rgba(56,189,248,.18); }
+
+    .price-num {
+      font-family: var(--disp);
+      font-weight: 900;
+      font-size: clamp(22px, 2.8vw, 36px);
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .eur-tile .price-num {
+      color: var(--orange);
+      text-shadow: 0 0 22px rgba(247,147,26,.6), 0 0 50px rgba(247,147,26,.18);
+    }
+    .usd-tile .price-num {
+      color: var(--blue);
+      text-shadow: 0 0 22px rgba(56,189,248,.55), 0 0 50px rgba(56,189,248,.15);
+    }
+
+    .price-num.up   { animation: fUp   .45s ease; }
+    .price-num.down { animation: fDown .45s ease; }
+    @keyframes fUp {
+      35% { color: var(--green); text-shadow: 0 0 30px rgba(34,197,94,.8); }
+    }
+    @keyframes fDown {
+      35% { color: var(--red); text-shadow: 0 0 30px rgba(239,68,68,.8); }
+    }
+
+    .delta {
+      font-family: var(--disp);
+      font-size: 14px;
+      font-weight: 700;
+      margin-top: 8px;
+      min-height: 18px;
+      letter-spacing: 1px;
+    }
+    .delta.up   { color: var(--green); }
+    .delta.down { color: var(--red); }
+
+    .hilo {
+      font-size: 17px;
+      color: var(--muted);
+      margin-top: 6px;
+      display: flex;
+      gap: 12px;
+    }
+    .hilo .hi { color: #4ADE80; }
+    .hilo .lo { color: #F87171; }
+
+    /* ── Block tile ───────────────────────────────────── */
+    .block-tile { --glow: rgba(247,147,26,.04); }
+    .block-tile.flash {
+      animation: blockFlash 1.8s ease;
+    }
+    @keyframes blockFlash {
+      0%   { border-color: var(--orange); box-shadow: 0 0 30px rgba(247,147,26,.5), inset 0 0 20px rgba(247,147,26,.08); }
+      60%  { border-color: var(--orange); }
+      100% { border-color: var(--bdr); box-shadow: none; }
+    }
+
+    .block-num {
+      font-family: var(--disp);
+      font-weight: 700;
+      font-size: clamp(28px, 3.8vw, 48px);
+      color: var(--text);
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    /* ── Halving tile ─────────────────────────────────── */
+    .halv-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 2px;
+      margin-bottom: 10px;
+      overflow: visible;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .halv-fill {
+      height: 100%;
+      background: linear-gradient(90deg, rgba(247,147,26,.25), var(--orange));
+      border-radius: 2px;
+      transition: width .8s ease;
+      position: relative;
+    }
+    .halv-fill::after {
+      content: '';
+      position: absolute;
+      right: 0; top: 50%;
+      transform: translate(50%,-50%);
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: var(--orange);
+      box-shadow: 0 0 10px var(--orange), 0 0 20px rgba(247,147,26,.4);
+    }
+
+    .halv-num {
+      font-family: var(--disp);
+      font-weight: 700;
+      font-size: clamp(26px, 3.5vw, 44px);
+      color: var(--text);
+      line-height: 1;
+    }
+
+    /* ── Mempool tile ─────────────────────────────────── */
+    .mempool-tile { --glow: rgba(168,139,250,.05); }
+
+    .mp-big {
+      font-family: var(--disp);
+      font-weight: 700;
+      font-size: clamp(24px, 3.2vw, 40px);
+      color: var(--purple);
+      text-shadow: 0 0 18px rgba(168,139,250,.5);
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    /* ── Difficulty tile ──────────────────────────────── */
+    .diff-tile { --glow: rgba(56,189,248,.04); }
+
+    .diff-pct {
+      font-family: var(--disp);
+      font-weight: 700;
+      font-size: clamp(26px, 3.5vw, 44px);
+      line-height: 1;
+    }
+    .diff-pct.pos { color: var(--red);   text-shadow: 0 0 16px rgba(239,68,68,.4); }
+    .diff-pct.neg { color: var(--green); text-shadow: 0 0 16px rgba(34,197,94,.4); }
+
+    .adj-bar {
+      height: 4px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 2px;
+      margin: 10px 0 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .adj-fill {
+      height: 100%;
+      background: var(--blue);
+      border-radius: 2px;
+      transition: width .8s ease;
+      box-shadow: 2px 0 8px rgba(56,189,248,.5);
+    }
+
+    /* ── Fee tiles ────────────────────────────────────── */
+    .fee-eco  { border-left: 3px solid rgba(90,106,122,.7); }
+    .fee-norm { border-left: 3px solid rgba(247,147,26,.8); --glow: rgba(247,147,26,.04); }
+    .fee-fast { border-left: 3px solid rgba(34,197,94,.8);  --glow: rgba(34,197,94,.04); }
+
+    .fee-icon { font-size: 22px; margin-bottom: 4px; flex-shrink: 0; }
+
+    .fee-num {
+      font-family: var(--disp);
+      font-weight: 900;
+      font-size: clamp(30px, 4.2vw, 54px);
+      line-height: 1;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-top: auto;
+    }
+    .fee-eco  .fee-num { color: #8FA5BF; }
+    .fee-norm .fee-num { color: var(--orange); text-shadow: 0 0 18px rgba(247,147,26,.5); }
+    .fee-fast .fee-num { color: var(--green);  text-shadow: 0 0 18px rgba(34,197,94,.5); }
+
+    /* ── Skeleton ─────────────────────────────────────── */
+    .sk { color: var(--muted); animation: sk 1s step-end infinite; }
+    @keyframes sk { 50% { opacity: .12; } }
+
+    /* ── Slide-in animation for number updates ──────── */
+    @keyframes slideIn {
+      from { transform: translateY(100%); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .slide-in { animation: slideIn .22s cubic-bezier(.22,1,.36,1); }
+  </style>
+</head>
+<body>
+<div class="vignette"></div>
+<div class="root">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">₿ BTCDISPLAY</div>
+    <div class="hright">
+      <div class="live">
+        <div class="dot-wrap">
+          <div class="dot off" id="dot"></div>
+          <div class="dot-ring" id="dotRing"></div>
+        </div>
+        <span id="liveLabel">CONNECTING</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Sparkline strip -->
+  <div class="spark-strip">
+    <div class="lbl">EUR PRIJS HISTORIE</div>
+    <svg viewBox="0 0 800 38" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"   stop-color="#F7931A" stop-opacity=".3"/>
+          <stop offset="100%" stop-color="#F7931A" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="gl">
+          <feGaussianBlur stdDeviation=".8" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <path id="sArea" fill="url(#sg)"/>
+      <path id="sLine" fill="none" stroke="#F7931A" stroke-width="1.5" filter="url(#gl)"/>
+    </svg>
+  </div>
+
+  <!-- Main grid -->
+  <div class="grid">
+
+    <!-- EUR -->
+    <div class="tile eur-tile">
+      <div class="lbl">BTC / EUR</div>
+      <div class="slide-wrap">
+        <div class="price-num sk" id="pEUR">———</div>
+      </div>
+      <div class="delta" id="dEUR"></div>
+      <div class="hilo" id="hiloEUR"><span class="hi">↑ —</span><span class="lo">↓ —</span></div>
+      <div class="sub" id="satsEUR" style="margin-top:auto">—</div>
+    </div>
+
+    <!-- Block height -->
+    <div class="tile block-tile" id="blockTile">
+      <div class="lbl">BLOCK HEIGHT</div>
+      <div class="slide-wrap">
+        <div class="block-num sk" id="blockNum">——</div>
+      </div>
+      <div class="sub" id="blockAge">—</div>
+    </div>
+
+    <!-- Halvering -->
+    <div class="tile">
+      <div class="lbl">HALVERING</div>
+      <div class="halv-bar"><div class="halv-fill" id="halvFill" style="width:0%"></div></div>
+      <div class="slide-wrap">
+        <div class="halv-num sk" id="halvNum">——</div>
+      </div>
+      <div class="sub">blokken resterend</div>
+      <div class="sub" id="halvDate"></div>
+    </div>
+
+    <!-- USD -->
+    <div class="tile usd-tile">
+      <div class="lbl">BTC / USD</div>
+      <div class="slide-wrap">
+        <div class="price-num sk" id="pUSD">———</div>
+      </div>
+      <div class="delta" id="dUSD"></div>
+      <div class="hilo" id="hiloUSD"><span class="hi">↑ —</span><span class="lo">↓ —</span></div>
+      <div class="sub" id="satsUSD" style="margin-top:auto">—</div>
+    </div>
+
+    <!-- Mempool -->
+    <div class="tile mempool-tile">
+      <div class="lbl">MEMPOOL</div>
+      <div class="slide-wrap" style="margin-bottom:6px">
+        <div class="mp-big sk" id="mpTx">—</div>
+      </div>
+      <div class="sub">onbevestigde transacties</div>
+      <div class="slide-wrap" style="margin-top:10px">
+        <div class="mp-big sk" style="font-size:clamp(20px,2.6vw,32px); color:#C4B5FD" id="mpMB">—</div>
+      </div>
+      <div class="sub">vMegabyte</div>
+    </div>
+
+    <!-- Difficulty -->
+    <div class="tile diff-tile">
+      <div class="lbl">DIFFICULTY ADJ.</div>
+      <div class="slide-wrap">
+        <div class="diff-pct sk" id="diffPct">—</div>
+      </div>
+      <div class="adj-bar"><div class="adj-fill" id="adjFill" style="width:0%"></div></div>
+      <div class="sub" id="diffBlocks">—</div>
+      <div class="sub" id="diffDate" style="margin-top:3px">—</div>
+    </div>
+
+    <!-- Economy fee -->
+    <div class="tile fee-eco">
+      <div class="fee-icon">🐢</div>
+      <div class="lbl">ECONOMY</div>
+      <div class="slide-wrap">
+        <div class="fee-num sk" id="fEco">—</div>
+      </div>
+      <div class="sub">sat / vByte</div>
+    </div>
+
+    <!-- Normal fee -->
+    <div class="tile fee-norm">
+      <div class="fee-icon">⚡</div>
+      <div class="lbl">NORMAAL</div>
+      <div class="slide-wrap">
+        <div class="fee-num sk" id="fNorm">—</div>
+      </div>
+      <div class="sub">sat / vByte</div>
+    </div>
+
+    <!-- Priority fee -->
+    <div class="tile fee-fast">
+      <div class="fee-icon">🚀</div>
+      <div class="lbl">PRIORITY</div>
+      <div class="slide-wrap">
+        <div class="fee-num sk" id="fFast">—</div>
+      </div>
+      <div class="sub">sat / vByte</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Constants ──────────────────────────────────────────────────────────────
+const HALVING  = 210_000;
+const BSEC     = 600;
+const MAXHIST  = 150;
+
+// ── State ──────────────────────────────────────────────────────────────────
+const price = { EUR: null, USD: null };
+const prev  = { EUR: null, USD: null };
+const high  = { EUR: null, USD: null };
+const low   = { EUR: null, USD: null };
+const hist  = [];
+let blockH  = null, blockTs = null;
+let fees    = {};
+let mpInfo  = {};
+let diff    = {};
+let priceOk = false, blockOk = false;
+
+// ── Formatters ─────────────────────────────────────────────────────────────
+const fmtC = (n,c) => new Intl.NumberFormat('nl-NL',{style:'currency',currency:c,minimumFractionDigits:0,maximumFractionDigits:0}).format(n);
+const fmtN = n => new Intl.NumberFormat('nl-NL').format(n);
+
+function ago(ts) {
+  const s = Math.floor(Date.now()/1000) - ts;
+  if (s < 90)   return `${s}s geleden`;
+  if (s < 3600) return `${Math.floor(s/60)}m geleden`;
+  return `${Math.floor(s/3600)}u geleden`;
+}
+
+// ── SlotNum — slot-machine digit roller ────────────────────────────────────
+class SlotNum {
+  constructor(el) {
+    this.el = el;
+    this.reels = [];
+    this.prevText = '';
+    el.innerHTML = '';
+    el.style.cssText += ';display:inline-flex;align-items:flex-end;line-height:1;';
+  }
+
+  set(text) {
+    if (text === this.prevText) return;
+    this.el.classList.remove('sk');
+
+    const chars = [...text];
+    // Rebuild if length or structure changed
+    const changed = chars.length !== this.reels.length ||
+      chars.some((c, i) => /\d/.test(c) !== (this.reels[i]?.type === 'digit'));
+
+    if (changed) {
+      this.el.innerHTML = '';
+      this.reels = chars.map(c => {
+        const r = /\d/.test(c) ? this._makeReel(parseInt(c)) : this._makeSep(c);
+        this.el.appendChild(r.el);
+        return r;
+      });
+      this.prevText = text;
+      return;
+    }
+
+    // Animate only changed digits, cascade delay right→left
+    const digits = chars.filter(c => /\d/.test(c));
+    const n = digits.length;
+    let di = 0;
+    chars.forEach((c, i) => {
+      if (/\d/.test(c)) {
+        const fromRight = n - di - 1;
+        this.reels[i].setDigit(parseInt(c), fromRight);
+        di++;
+      }
+    });
+    this.prevText = text;
+  }
+
+  _makeReel(init) {
+    const wrap = document.createElement('span');
+    wrap.style.cssText = 'display:inline-block;overflow:hidden;height:1em;vertical-align:bottom;';
+    const inner = document.createElement('span');
+    inner.style.cssText = `display:flex;flex-direction:column;transform:translateY(-${init}em);will-change:transform;`;
+    for (let d = 0; d <= 9; d++) {
+      const s = document.createElement('span');
+      s.style.cssText = 'display:block;height:1em;line-height:1;text-align:center;';
+      s.textContent = d;
+      inner.appendChild(s);
+    }
+    wrap.appendChild(inner);
+    let cur = init;
+    return {
+      type: 'digit', el: wrap, inner,
+      setDigit(d, fromRight = 0) {
+        if (d === cur) return;
+        cur = d;
+        const delay = fromRight * 35;
+        inner.style.transition = `transform 520ms cubic-bezier(0.22,1,0.36,1) ${delay}ms`;
+        inner.style.transform = `translateY(-${d}em)`;
+      }
+    };
+  }
+
+  _makeSep(c) {
+    const el = document.createElement('span');
+    el.style.cssText = 'display:inline-block;height:1em;line-height:1;vertical-align:bottom;white-space:pre;';
+    el.textContent = c;
+    return { type: 'sep', el };
+  }
+}
+
+// Slot instances (created after DOM ready)
+let slotEUR, slotUSD, slotBlock, slotHalv;
+
+// Silent update — for fast-updating values (fees, mempool)
+function setNum(el, text) {
+  if (el.textContent === text) return;
+  el.classList.remove('sk');
+  el.textContent = text;
+}
+
+// ── Live indicator ─────────────────────────────────────────────────────────
+function syncLive() {
+  const on = priceOk && blockOk;
+  const d = document.getElementById('dot');
+  d.className = 'dot' + (on ? '' : ' off');
+  document.getElementById('liveLabel').textContent = on ? 'LIVE' : 'CONNECTING';
+}
+
+// ── Sparkline ─────────────────────────────────────────────────────────────
+function renderSpark() {
+  if (hist.length < 2) return;
+  const W=800, H=38, mg=3;
+  const mn=Math.min(...hist), mx=Math.max(...hist), rng=mx-mn||1;
+  const pts = hist.map((v,i)=>[
+    (i/(hist.length-1))*W,
+    H-mg-((v-mn)/rng)*(H-mg*2)
+  ]);
+  const line = 'M '+pts.map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join(' L ');
+  document.getElementById('sLine').setAttribute('d', line);
+  document.getElementById('sArea').setAttribute('d', `${line} L ${W},${H} L 0,${H} Z`);
+}
+
+// ── Render: prices ─────────────────────────────────────────────────────────
+function renderPrice(c) {
+  const slot  = c === 'EUR' ? slotEUR : slotUSD;
+  const el    = document.getElementById(c === 'EUR' ? 'pEUR' : 'pUSD');
+  const dEl   = document.getElementById(c === 'EUR' ? 'dEUR' : 'dUSD');
+  const satId = c === 'EUR' ? 'satsEUR' : 'satsUSD';
+  const p = price[c], pp = prev[c];
+  if (!p) return;
+
+  slot.set(fmtC(p, c));
+
+  if (pp && pp !== p) {
+    const up  = p > pp;
+    const pct = ((p-pp)/pp*100).toFixed(3);
+    el.classList.remove('up','down');
+    void el.offsetWidth;
+    el.classList.add(up ? 'up' : 'down');
+    dEl.className = 'delta '+(up ? 'up' : 'down');
+    dEl.textContent = `${up ? '▲' : '▼'} ${Math.abs(pct)}%`;
+    setTimeout(() => { dEl.textContent=''; dEl.className='delta'; }, 5000);
+  }
+
+  const v = 1_000_000 / p;
+  const sym = c === 'EUR' ? '€' : '$';
+  document.getElementById(satId).textContent =
+    `1M sats = ${sym}${v < 1 ? v.toFixed(2) : v.toFixed(1)}`;
+
+  // 24h high / low
+  const hiloEl = document.getElementById(c === 'EUR' ? 'hiloEUR' : 'hiloUSD');
+  if (high[c] && low[c]) {
+    hiloEl.children[0].textContent = `↑ ${fmtC(high[c], c)}`;
+    hiloEl.children[1].textContent = `↓ ${fmtC(low[c], c)}`;
+  }
+}
+
+// ── Render: block ──────────────────────────────────────────────────────────
+function renderBlock(isNew) {
+  if (!blockH) return;
+  slotBlock.set(fmtN(blockH));
+  if (blockTs) document.getElementById('blockAge').textContent = ago(blockTs);
+
+  if (isNew) {
+    const t = document.getElementById('blockTile');
+    t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash');
+  }
+
+  const lastH = Math.floor(blockH/HALVING)*HALVING;
+  const left  = HALVING-(blockH-lastH);
+  const pct   = ((blockH-lastH)/HALVING)*100;
+  document.getElementById('halvFill').style.width = pct.toFixed(2)+'%';
+  slotHalv.set(fmtN(left));
+  document.getElementById('halvDate').textContent =
+    'est. '+new Date(Date.now()+left*BSEC*1000).toLocaleDateString('nl-NL',{month:'long',year:'numeric'});
+}
+
+// ── Render: fees ───────────────────────────────────────────────────────────
+function renderFees() {
+  const {economyFee:e, hourFee:n, fastestFee:f} = fees;
+  if (!f) return;
+  setNum(document.getElementById('fEco'),  String(e));
+  setNum(document.getElementById('fNorm'), String(n));
+  setNum(document.getElementById('fFast'), String(f));
+}
+
+// ── Render: mempool ────────────────────────────────────────────────────────
+function renderMempool() {
+  const {size, bytes} = mpInfo;
+  if (!size) return;
+  setNum(document.getElementById('mpTx'), fmtN(size));
+  setNum(document.getElementById('mpMB'), (bytes/1e6).toFixed(1));
+}
+
+// ── Render: difficulty ─────────────────────────────────────────────────────
+function renderDiff() {
+  if (!diff.remainingBlocks) return;
+  const pct = diff.difficultyChange || 0;
+  const el  = document.getElementById('diffPct');
+  el.classList.remove('sk','pos','neg');
+  el.classList.add(pct >= 0 ? 'pos' : 'neg');
+  slideNum(el, (pct>=0?'+':'')+pct.toFixed(1)+'%');
+  document.getElementById('adjFill').style.width = (diff.progressPercent||0).toFixed(1)+'%';
+  document.getElementById('diffBlocks').textContent = `${fmtN(diff.remainingBlocks)} blokken`;
+  if (diff.estimatedRetargetDate) {
+    const d = new Date(diff.estimatedRetargetDate*1000);
+    document.getElementById('diffDate').textContent =
+      'aanpassing '+d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+  }
+}
+
+// ── REST boot ──────────────────────────────────────────────────────────────
+async function boot() {
+  try {
+    const d = await (await fetch('https://api.kraken.com/0/public/Ticker?pair=XBTZEUR,XBTZUSD')).json();
+    price.EUR = Math.round(parseFloat(d.result.XXBTZEUR.c[0]));
+    price.USD = Math.round(parseFloat(d.result.XXBTZUSD.c[0]));
+    high.EUR  = Math.round(parseFloat(d.result.XXBTZEUR.h[1]));
+    high.USD  = Math.round(parseFloat(d.result.XXBTZUSD.h[1]));
+    low.EUR   = Math.round(parseFloat(d.result.XXBTZEUR.l[1]));
+    low.USD   = Math.round(parseFloat(d.result.XXBTZUSD.l[1]));
+    hist.push(price.EUR);
+    renderPrice('EUR'); renderPrice('USD');
+  } catch(e) {}
+
+  try {
+    fees = await (await fetch('https://mempool.space/api/v1/fees/recommended')).json();
+    renderFees();
+  } catch(e) {}
+
+  try {
+    blockH = await (await fetch('https://mempool.space/api/blocks/tip/height')).json();
+    const hash = await (await fetch('https://mempool.space/api/blocks/tip/hash')).text();
+    blockTs = (await (await fetch(`https://mempool.space/api/block/${hash}`)).json()).timestamp;
+    renderBlock(false);
+  } catch(e) {}
+
+  try {
+    diff = await (await fetch('https://mempool.space/api/v1/difficulty-adjustment')).json();
+    renderDiff();
+  } catch(e) {}
+
+  try {
+    mpInfo = await (await fetch('https://mempool.space/api/mempool')).json();
+    renderMempool();
+  } catch(e) {}
+}
+
+// ── Kraken WebSocket ───────────────────────────────────────────────────────
+function wsKraken() {
+  const ws = new WebSocket('wss://ws.kraken.com/v2');
+  ws.onopen = () => ws.send(JSON.stringify({
+    method:'subscribe', params:{channel:'ticker', symbol:['BTC/EUR','BTC/USD']}
+  }));
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.channel!=='ticker'||!msg.data?.[0]) return;
+    const d  = msg.data[0];
+    const c  = d.symbol==='BTC/EUR'?'EUR':'USD';
+    const np = Math.round(d.last);
+    prev[c] = price[c]; price[c] = np;
+    if (d.high) high[c] = Math.round(d.high);
+    if (d.low)  low[c]  = Math.round(d.low);
+    if (c==='EUR') { hist.push(np); if(hist.length>MAXHIST) hist.shift(); renderSpark(); }
+    renderPrice(c);
+    priceOk=true; syncLive();
+  };
+  ws.onclose = ()=>{ priceOk=false; syncLive(); setTimeout(wsKraken,3000); };
+  ws.onerror = ()=>ws.close();
+}
+
+// ── Mempool WebSocket ──────────────────────────────────────────────────────
+function wsMempool() {
+  const ws = new WebSocket('wss://mempool.space/api/v1/ws');
+  ws.onopen = () => {
+    ws.send(JSON.stringify({action:'init'}));
+    ws.send(JSON.stringify({action:'want', data:['blocks','mempool-blocks','stats']}));
+  };
+  ws.onmessage = e => {
+    const msg = JSON.parse(e.data);
+
+    if (msg.block) {
+      const isNew = blockH && msg.block.height > blockH;
+      blockH = msg.block.height; blockTs = msg.block.timestamp;
+      renderBlock(isNew);
+    }
+    if (msg.mempoolInfo) { mpInfo = msg.mempoolInfo; renderMempool(); }
+    if (msg['mempool-blocks']?.[0]) {
+      const med = msg['mempool-blocks'][0].medianFee;
+      fees = { economyFee:Math.max(1,Math.round(med*.45)), hourFee:Math.max(1,Math.round(med)), fastestFee:Math.max(1,Math.round(med*1.3)) };
+      renderFees();
+    }
+    if (msg.fees) { fees={...fees,...msg.fees}; renderFees(); }
+
+    blockOk=true; syncLive();
+  };
+  ws.onclose = ()=>{ blockOk=false; syncLive(); setTimeout(wsMempool,3000); };
+  ws.onerror = ()=>ws.close();
+}
+
+// ── Ticks ──────────────────────────────────────────────────────────────────
+setInterval(()=>{
+  if(blockTs) document.getElementById('blockAge').textContent = ago(blockTs);
+}, 15_000);
+
+setInterval(async()=>{
+  try { diff=await(await fetch('https://mempool.space/api/v1/difficulty-adjustment')).json(); renderDiff(); }catch(e){}
+}, 600_000);
+
+// ── Go ─────────────────────────────────────────────────────────────────────
+slotEUR   = new SlotNum(document.getElementById('pEUR'));
+slotUSD   = new SlotNum(document.getElementById('pUSD'));
+slotBlock = new SlotNum(document.getElementById('blockNum'));
+slotHalv  = new SlotNum(document.getElementById('halvNum'));
+
+boot(); wsKraken(); wsMempool();
+</script>
+</body>
+</html>
