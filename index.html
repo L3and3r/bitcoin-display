@@ -91,13 +91,32 @@
       padding: 0 4px;
     }
 
-    .logo {
-      font-family: var(--disp);
-      font-weight: 900;
-      font-size: 15px;
-      letter-spacing: 6px;
-      color: var(--orange);
-      text-shadow: 0 0 20px rgba(247,147,26,.6), 0 0 40px rgba(247,147,26,.2);
+    .logo-img {
+      height: 42px;
+      width: auto;
+      display: block;
+      animation: logoGlow 5s ease-in-out infinite alternate;
+    }
+    @keyframes logoGlow {
+      from { filter: invert(1) sepia(1) saturate(6) hue-rotate(350deg)
+                     drop-shadow(0 0 10px rgba(247,147,26,.6))
+                     drop-shadow(0 0 24px rgba(247,147,26,.3)); }
+      to   { filter: invert(1) sepia(1) saturate(10) hue-rotate(350deg) brightness(1.18)
+                     drop-shadow(0 0 28px rgba(247,147,26,1))
+                     drop-shadow(0 0 50px rgba(247,147,26,.5)); }
+    }
+
+    .watermark {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 85%;
+      max-width: 860px;
+      pointer-events: none;
+      z-index: 0;
+      user-select: none;
+      filter: invert(1) sepia(1) saturate(4) hue-rotate(350deg);
+      opacity: 0.06;
     }
 
     .hright {
@@ -526,12 +545,13 @@
 </head>
 <body>
 <div id="shockwave"></div>
+<img src="Noderunners-Logo-Black-big.png" class="watermark" alt="">
 <div class="vignette"></div>
 <div class="root">
 
   <!-- Header -->
   <header>
-    <div class="logo">₿ BTCDISPLAY</div>
+    <img src="Noderunners-Logo-Black-big.png" class="logo-img" alt="Noderunners">
     <div class="hright">
       <div class="live">
         <div class="dot-wrap">
